@@ -344,12 +344,15 @@ router.delete('/coupons/:id', requireRole('MANAGER'), async (req, res) => {
 router.get('/products', requireRole('MANAGER'), async (req, res) => {
   const products = await prisma.product.findMany({
     orderBy: [{ category: { sortOrder: 'asc' } }, { name: 'asc' }],
-    include: { category: { select: { name: true } } },
+    include: { category: { select: { name: true } }, addons: { orderBy: { priceCents: 'asc' } } },
   });
   res.json({
     products: products.map((p) => ({
-      id: p.id, name: p.name, category: p.category.name,
-      priceCents: p.priceCents, costCents: p.costCents, available: p.available,
+      id: p.id, categoryId: p.categoryId, category: p.category.name, name: p.name,
+      description: p.description, ingredients: p.ingredients, imageUrl: p.imageUrl,
+      priceCents: p.priceCents, costCents: p.costCents, prepMinutes: p.prepMinutes,
+      available: p.available, featured: p.featured,
+      addons: p.addons.map((a) => ({ id: a.id, name: a.name, priceCents: a.priceCents, active: a.active })),
     })),
   });
 });
@@ -481,6 +484,117 @@ router.get('/reports/profit', requireRole('MANAGER'), async (req, res) => {
     marginPct: revenueCents ? Math.round((estimatedProfitCents / revenueCents) * 1000) / 10 : 0,
     note: 'Estimativa: usa o custo cadastrado em cada produto no momento da venda. Pedidos antigos sem custo cadastrado entram com custo zero, e custos de adicionais, embalagens e entregadores não estão incluídos.',
   });
+});
+
+// ---------- Cadastro do cardápio (gerente ou acima) ----------
+const imageUrlSchema = z
+  .string()
+  .trim()
+  .max(500)
+  .url('Link da foto inválido')
+  .refine((u) => u.startsWith('https://'), 'A foto precisa de um link https://')
+  .nullable()
+  .optional();
+
+const productFields = z.object({
+  categoryId: z.string().min(1).max(64),
+  name: z.string().trim().min(2).max(120),
+  description: z.string().trim().min(5).max(500),
+  ingredients: z.string().trim().min(3).max(500),
+  priceCents: z.number().int().min(1).max(10000000),
+  costCents: z.number().int().min(0).max(10000000).optional(),
+  prepMinutes: z.number().int().min(1).max(240).optional(),
+  available: z.boolean().optional(),
+  featured: z.boolean().optional(),
+  imageUrl: imageUrlSchema,
+});
+
+async function categoryExists(id) {
+  return !!(await prisma.category.findUnique({ where: { id }, select: { id: true } }));
+}
+
+router.get('/categories', requireRole('MANAGER'), async (req, res) => {
+  res.json({ categories: await prisma.category.findMany({ orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }] }) });
+});
+
+const categorySchema = z.object({
+  name: z.string().trim().min(2).max(60),
+  sortOrder: z.number().int().min(0).max(999).optional(),
+});
+
+router.post('/categories', requireRole('MANAGER'), async (req, res) => {
+  const p = categorySchema.safeParse(req.body);
+  if (!p.success) return res.status(400).json({ error: p.error.issues[0].message });
+  try {
+    const category = await prisma.category.create({ data: { name: p.data.name, sortOrder: p.data.sortOrder ?? 0 } });
+    res.status(201).json({ category });
+  } catch (err) {
+    if (err.code === 'P2002') return res.status(409).json({ error: 'Já existe uma categoria com este nome' });
+    throw err;
+  }
+});
+
+router.post('/products', requireRole('MANAGER'), async (req, res) => {
+  const p = productFields.safeParse(req.body);
+  if (!p.success) return res.status(400).json({ error: p.error.issues[0].message });
+  const d = p.data;
+  if (!(await categoryExists(d.categoryId))) return res.status(400).json({ error: 'Categoria não encontrada' });
+  const product = await prisma.product.create({
+    data: {
+      categoryId: d.categoryId, name: d.name, description: d.description, ingredients: d.ingredients,
+      priceCents: d.priceCents, costCents: d.costCents ?? 0, prepMinutes: d.prepMinutes ?? 15,
+      available: d.available ?? true, featured: d.featured ?? false, imageUrl: d.imageUrl || null,
+    },
+  });
+  await prisma.activityLog.create({ data: { userId: req.user.id, action: 'product.create', entity: 'product', entityId: product.id, meta: { name: d.name } } });
+  res.status(201).json({ product });
+});
+
+router.put('/products/:id', requireRole('MANAGER'), async (req, res) => {
+  const p = productFields.safeParse(req.body);
+  if (!p.success) return res.status(400).json({ error: p.error.issues[0].message });
+  const d = p.data;
+  if (!(await categoryExists(d.categoryId))) return res.status(400).json({ error: 'Categoria não encontrada' });
+  const data = {
+    categoryId: d.categoryId, name: d.name, description: d.description, ingredients: d.ingredients,
+    priceCents: d.priceCents, imageUrl: d.imageUrl || null,
+    ...(d.costCents !== undefined ? { costCents: d.costCents } : {}),
+    ...(d.prepMinutes !== undefined ? { prepMinutes: d.prepMinutes } : {}),
+    ...(d.available !== undefined ? { available: d.available } : {}),
+    ...(d.featured !== undefined ? { featured: d.featured } : {}),
+  };
+  const r = await prisma.product.updateMany({ where: { id: req.params.id }, data });
+  if (!r.count) return res.status(404).json({ error: 'Produto não encontrado' });
+  await prisma.activityLog.create({ data: { userId: req.user.id, action: 'product.edit', entity: 'product', entityId: req.params.id } });
+  res.json({ ok: true });
+});
+
+// Excluir produto: o histórico de pedidos guarda o nome e o preço do momento da venda, então não é afetado.
+router.delete('/products/:id', requireRole('MANAGER'), async (req, res) => {
+  const r = await prisma.product.deleteMany({ where: { id: req.params.id } });
+  if (!r.count) return res.status(404).json({ error: 'Produto não encontrado' });
+  await prisma.activityLog.create({ data: { userId: req.user.id, action: 'product.delete', entity: 'product', entityId: req.params.id } });
+  res.json({ ok: true });
+});
+
+const addonSchema = z.object({
+  name: z.string().trim().min(2).max(80),
+  priceCents: z.number().int().min(0).max(1000000),
+});
+
+router.post('/products/:id/addons', requireRole('MANAGER'), async (req, res) => {
+  const p = addonSchema.safeParse(req.body);
+  if (!p.success) return res.status(400).json({ error: p.error.issues[0].message });
+  const product = await prisma.product.findUnique({ where: { id: req.params.id }, select: { id: true } });
+  if (!product) return res.status(404).json({ error: 'Produto não encontrado' });
+  const addon = await prisma.addon.create({ data: { productId: product.id, name: p.data.name, priceCents: p.data.priceCents } });
+  res.status(201).json({ addon });
+});
+
+router.delete('/addons/:id', requireRole('MANAGER'), async (req, res) => {
+  const r = await prisma.addon.deleteMany({ where: { id: req.params.id } });
+  if (!r.count) return res.status(404).json({ error: 'Adicional não encontrado' });
+  res.json({ ok: true });
 });
 
 export default router;

@@ -12,7 +12,7 @@ router.get('/', async (req, res) => {
         orderBy: { popularity: 'desc' },
         select: {
           id: true, name: true, description: true, ingredients: true,
-          priceCents: true, prepMinutes: true, available: true, featured: true,
+          priceCents: true, prepMinutes: true, available: true, featured: true, imageUrl: true,
           addons: { where: { active: true }, select: { id: true, name: true, priceCents: true }, orderBy: { priceCents: 'asc' } },
         },
       },
