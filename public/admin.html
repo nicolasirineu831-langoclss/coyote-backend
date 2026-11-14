@@ -131,7 +131,44 @@ th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5p
 
     <section data-view="menu" class="hidden">
       <h1>Cardápio</h1>
-      <p class="meta">Altere preço e disponibilidade. Criação e exclusão de produtos entram na próxima etapa.</p>
+      <p class="meta">Cadastre categorias e produtos, edite preço, custo e disponibilidade, e gerencie adicionais.</p>
+      <div class="panel">
+        <h2 style="font-size:20px" id="pfTitle">Novo produto</h2>
+        <form id="pfForm">
+          <div class="row">
+            <div style="flex:1;min-width:160px"><label for="pfCat">Categoria</label><select id="pfCat" required></select></div>
+            <div style="flex:2;min-width:200px"><label for="pfName">Nome</label><input id="pfName" required maxlength="120"></div>
+            <div style="flex:1;min-width:110px"><label for="pfPrice">Preço (R$)</label><input id="pfPrice" inputmode="decimal" required></div>
+            <div style="flex:1;min-width:110px"><label for="pfCost">Custo (R$)</label><input id="pfCost" inputmode="decimal" value="0"></div>
+          </div>
+          <label for="pfDesc">Descrição</label><textarea id="pfDesc" rows="2" maxlength="500" required></textarea>
+          <label for="pfIng">Ingredientes (separados por vírgula)</label><textarea id="pfIng" rows="2" maxlength="500" required></textarea>
+          <div class="row">
+            <div style="flex:1;min-width:150px"><label for="pfPrep">Tempo de preparo (min)</label><input id="pfPrep" inputmode="numeric" value="15"></div>
+            <div style="flex:2;min-width:240px"><label for="pfImg">Link da foto (https, opcional)</label><input id="pfImg" type="url" placeholder="https://..."></div>
+          </div>
+          <label style="display:flex;gap:8px;align-items:center;margin-top:12px"><input type="checkbox" id="pfAvail" checked style="width:20px;height:20px"> Disponível para pedido</label>
+          <div class="row" style="margin-top:12px"><button type="submit" id="pfSave">Cadastrar produto</button><button type="button" class="ghost" id="pfCancel">Cancelar</button></div>
+        </form>
+      </div>
+      <div class="panel">
+        <h2 style="font-size:20px">Nova categoria</h2>
+        <form id="catForm" class="row" style="align-items:flex-end">
+          <div style="flex:2;min-width:200px"><label for="catName">Nome</label><input id="catName" required maxlength="60" placeholder="Tacos, Burritos…"></div>
+          <div style="flex:1;min-width:100px"><label for="catOrder">Ordem</label><input id="catOrder" inputmode="numeric" value="0"></div>
+          <button type="submit">Criar categoria</button>
+        </form>
+      </div>
+      <div class="panel">
+        <h2 style="font-size:20px">Adicionais de um produto</h2>
+        <form id="addonForm" class="row" style="align-items:flex-end">
+          <div style="flex:2;min-width:200px"><label for="adProd">Produto</label><select id="adProd" required></select></div>
+          <div style="flex:2;min-width:160px"><label for="adName">Adicional</label><input id="adName" required maxlength="80" placeholder="Extra queijo"></div>
+          <div style="flex:1;min-width:110px"><label for="adPrice">Preço (R$)</label><input id="adPrice" inputmode="decimal" required></div>
+          <button type="submit">Adicionar</button>
+        </form>
+        <div id="adBody"></div>
+      </div>
       <div class="panel" id="menuBody"></div>
     </section>
 
@@ -439,33 +476,170 @@ async function loadCustomers() {
     : '<p class="meta">Nenhum cliente cadastrado.</p>';
 }
 
+let PRODUCTS = [], EDITING = null;
+
 async function loadMenu() {
-  const { products } = await api('/api/admin/products');
-  $('#menuBody').innerHTML = `<table class="wide"><thead><tr><th>Produto</th><th>Categoria</th><th>Preço (R$)</th><th>Custo (R$)</th><th>Disponível</th><th></th></tr></thead><tbody>${products
-    .map((p) => `<tr data-id="${esc(p.id)}">
-      <td>${esc(p.name)}</td><td>${esc(p.category)}</td>
-      <td><input type="text" inputmode="decimal" value="${fromCents(p.priceCents)}" aria-label="Preço de ${esc(p.name)}" style="width:110px"></td>
-      <td><input type="text" inputmode="decimal" value="${fromCents(p.costCents)}" aria-label="Custo de ${esc(p.name)}" style="width:110px"></td>
-      <td><input type="checkbox" class="av" ${p.available ? 'checked' : ''} aria-label="Disponível: ${esc(p.name)}" style="width:20px;height:20px"></td>
-      <td><button class="sm ghost save">Salvar</button></td></tr>`)
-    .join('')}</tbody></table>`;
+  const [{ products }, { categories }] = await Promise.all([api('/api/admin/products'), api('/api/admin/categories')]);
+  PRODUCTS = products;
+  $('#pfCat').innerHTML = categories.length
+    ? categories.map((c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')
+    : '<option value="">Crie uma categoria primeiro</option>';
+  const sel = $('#adProd').value;
+  $('#adProd').innerHTML = products.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('') || '<option value="">Nenhum produto</option>';
+  if (sel && products.some((p) => p.id === sel)) $('#adProd').value = sel;
+  $('#menuBody').innerHTML = products.length
+    ? `<table class="wide"><thead><tr><th>Produto</th><th>Categoria</th><th>Preço (R$)</th><th>Custo (R$)</th><th>Disponível</th><th></th></tr></thead><tbody>${products
+        .map((p) => `<tr data-id="${esc(p.id)}">
+          <td>${esc(p.name)}</td><td>${esc(p.category)}</td>
+          <td><input type="text" inputmode="decimal" value="${fromCents(p.priceCents)}" aria-label="Preço de ${esc(p.name)}" style="width:100px"></td>
+          <td><input type="text" inputmode="decimal" value="${fromCents(p.costCents)}" aria-label="Custo de ${esc(p.name)}" style="width:100px"></td>
+          <td><input type="checkbox" class="av" ${p.available ? 'checked' : ''} aria-label="Disponível: ${esc(p.name)}" style="width:20px;height:20px"></td>
+          <td><div class="actions" style="margin:0"><button class="sm ghost save">Salvar</button><button class="sm ghost edit">Editar</button><button class="sm red del">Excluir</button></div></td></tr>`)
+        .join('')}</tbody></table>`
+    : '<p class="meta">Nenhum produto cadastrado ainda.</p>';
+  renderAddons();
 }
 
-$('#menuBody').addEventListener('click', async (e) => {
-  const b = e.target.closest('button.save');
-  if (!b) return;
-  const tr = b.closest('tr');
-  const [priceEl, costEl] = tr.querySelectorAll('input[type=text]');
-  const priceCents = toCents(priceEl.value);
-  if (priceCents <= 0) return toast('Preço inválido');
+function resetProductForm() {
+  EDITING = null;
+  $('#pfForm').reset();
+  $('#pfTitle').textContent = 'Novo produto';
+  $('#pfSave').textContent = 'Cadastrar produto';
+  $('#pfCost').value = '0';
+  $('#pfPrep').value = '15';
+  $('#pfAvail').checked = true;
+}
+
+function startEdit(p) {
+  EDITING = p.id;
+  $('#pfCat').value = p.categoryId;
+  $('#pfName').value = p.name;
+  $('#pfPrice').value = fromCents(p.priceCents);
+  $('#pfCost').value = fromCents(p.costCents);
+  $('#pfDesc').value = p.description;
+  $('#pfIng').value = p.ingredients;
+  $('#pfPrep').value = p.prepMinutes;
+  $('#pfImg').value = p.imageUrl || '';
+  $('#pfAvail').checked = p.available;
+  $('#pfTitle').textContent = 'Editar produto';
+  $('#pfSave').textContent = 'Salvar alterações';
+  $('#pfForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+$('#pfCancel').addEventListener('click', resetProductForm);
+
+$('#pfForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const priceCents = toCents($('#pfPrice').value);
+  if (priceCents <= 0) return toast('Informe o preço');
+  const body = {
+    categoryId: $('#pfCat').value,
+    name: $('#pfName').value.trim(),
+    description: $('#pfDesc').value.trim(),
+    ingredients: $('#pfIng').value.trim(),
+    priceCents,
+    costCents: toCents($('#pfCost').value),
+    prepMinutes: parseInt($('#pfPrep').value, 10) || 15,
+    available: $('#pfAvail').checked,
+    imageUrl: $('#pfImg').value.trim() || null,
+  };
   try {
-    await api(`/api/admin/products/${encodeURIComponent(tr.dataset.id)}`, {
-      method: 'PATCH',
-      body: { priceCents, costCents: toCents(costEl.value), available: tr.querySelector('.av').checked },
-    });
-    toast('Produto atualizado');
+    if (EDITING) {
+      await api(`/api/admin/products/${encodeURIComponent(EDITING)}`, { method: 'PUT', body });
+      toast('Produto atualizado');
+    } else {
+      await api('/api/admin/products', { method: 'POST', body });
+      toast('Produto cadastrado');
+    }
+    resetProductForm();
+    await loadMenu();
   } catch (err) {
     toast(err.message);
+  }
+});
+
+$('#catForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  try {
+    await api('/api/admin/categories', { method: 'POST', body: { name: $('#catName').value.trim(), sortOrder: parseInt($('#catOrder').value, 10) || 0 } });
+    toast('Categoria criada');
+    e.target.reset();
+    $('#catOrder').value = '0';
+    await loadMenu();
+  } catch (err) {
+    toast(err.message);
+  }
+});
+
+$('#addonForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const priceCents = toCents($('#adPrice').value);
+  try {
+    await api(`/api/admin/products/${encodeURIComponent($('#adProd').value)}/addons`, { method: 'POST', body: { name: $('#adName').value.trim(), priceCents } });
+    toast('Adicional criado');
+    $('#adName').value = '';
+    $('#adPrice').value = '';
+    await loadMenu();
+  } catch (err) {
+    toast(err.message);
+  }
+});
+
+$('#adProd').addEventListener('change', renderAddons);
+
+function renderAddons() {
+  const p = PRODUCTS.find((x) => x.id === $('#adProd').value);
+  if (!p) return ($('#adBody').innerHTML = '');
+  $('#adBody').innerHTML = p.addons.length
+    ? `<table class="wide"><thead><tr><th>Adicional</th><th>Preço</th><th></th></tr></thead><tbody>${p.addons
+        .map((a) => `<tr><td>${esc(a.name)}</td><td>${brl(a.priceCents)}</td><td><button class="sm red adDel" data-id="${esc(a.id)}">Excluir</button></td></tr>`)
+        .join('')}</tbody></table>`
+    : '<p class="meta">Este produto ainda não tem adicionais.</p>';
+}
+
+$('#adBody').addEventListener('click', async (e) => {
+  const b = e.target.closest('button.adDel');
+  if (!b) return;
+  if (!confirm('Excluir este adicional?')) return;
+  try {
+    await api(`/api/admin/addons/${encodeURIComponent(b.dataset.id)}`, { method: 'DELETE' });
+    toast('Adicional excluído');
+    await loadMenu();
+  } catch (err) {
+    toast(err.message);
+  }
+});
+
+$('#menuBody').addEventListener('click', async (e) => {
+  const tr = e.target.closest('tr[data-id]');
+  if (!tr) return;
+  const p = PRODUCTS.find((x) => x.id === tr.dataset.id);
+  if (!p) return;
+  if (e.target.closest('button.edit')) return startEdit(p);
+  if (e.target.closest('button.del')) {
+    if (!confirm(`Excluir o produto "${p.name}"? Os adicionais dele também serão removidos.`)) return;
+    try {
+      await api(`/api/admin/products/${encodeURIComponent(p.id)}`, { method: 'DELETE' });
+      toast('Produto excluído');
+      await loadMenu();
+    } catch (err) {
+      toast(err.message);
+    }
+    return;
+  }
+  if (e.target.closest('button.save')) {
+    const [priceEl, costEl] = tr.querySelectorAll('input[type=text]');
+    const priceCents = toCents(priceEl.value);
+    if (priceCents <= 0) return toast('Preço inválido');
+    try {
+      await api(`/api/admin/products/${encodeURIComponent(p.id)}`, {
+        method: 'PATCH',
+        body: { priceCents, costCents: toCents(costEl.value), available: tr.querySelector('.av').checked },
+      });
+      toast('Produto atualizado');
+    } catch (err) {
+      toast(err.message);
+    }
   }
 });
 
