@@ -88,6 +88,7 @@ model Product {
   ingredients String
   priceCents  Int
   costCents   Int      @default(0)
+  imageUrl    String?
   prepMinutes Int      @default(15)
   available   Boolean  @default(true)
   featured    Boolean  @default(false)
