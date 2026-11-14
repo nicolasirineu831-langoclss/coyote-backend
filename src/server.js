@@ -10,6 +10,7 @@ import authRoutes from './routes/auth.js';
 import menuRoutes from './routes/menu.js';
 import orderRoutes from './routes/orders.js';
 import adminRoutes from './routes/admin.js';
+import { ensureOwner } from './lib/bootstrap.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -92,6 +93,8 @@ app.use((err, req, res, next) => {
   console.error(err);
   res.status(500).json({ error: 'Erro interno' });
 });
+
+ensureOwner().catch((err) => console.error('Bootstrap falhou:', err.message));
 
 const port = Number(process.env.PORT) || 3000;
 const server = app.listen(port, () => console.log(`Coyote rodando na porta ${port}`));
