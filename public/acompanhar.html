@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Acompanhar pedido · Coyote</title>
+<style>
+body{font-family:system-ui,sans-serif;background:#EFE6D2;color:#2A1A12;margin:0;padding:24px}
+main{max-width:520px;margin:0 auto;background:#FBF6EA;border:1px solid #DCCDB0;border-radius:16px;padding:20px}
+h1{font-size:24px;margin:0 0 12px}
+label{display:block;font-weight:500;font-size:14px;margin:12px 0 4px}
+input{width:100%;padding:10px 12px;border:2px solid #DCCDB0;border-radius:10px;font:inherit;background:#fff}
+button{margin-top:16px;width:100%;padding:12px;border:0;border-radius:999px;background:#D9342B;color:#fff;font:inherit;font-weight:700;cursor:pointer}
+button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid #E8A33D;outline-offset:2px}
+.err{color:#B2261F;font-size:14px;min-height:20px;margin-top:8px}
+.meta{color:#6B5444;font-size:14px}
+ol{list-style:none;padding:0;margin:16px 0}
+li{padding:6px 0;color:#6B5444}
+li.done{color:#2A1A12;font-weight:600}
+li.done::before{content:"✔ "}
+.back{display:inline-block;margin-top:16px;color:#1D4E89}
+</style>
+</head>
+<body>
+<main>
+  <h1>Acompanhar pedido</h1>
+  <p class="meta">Digite o número do pedido e o telefone usado na compra.</p>
+  <form id="f" novalidate>
+    <label for="num">Número do pedido</label>
+    <input id="num" name="number" placeholder="CYX-..." autocomplete="off" required>
+    <label for="ph">Telefone usado no pedido</label>
+    <input id="ph" name="phone" type="tel" placeholder="(19) 99999-9999" autocomplete="off" required>
+    <button type="submit">Consultar</button>
+    <div class="err" id="err" role="alert"></div>
+  </form>
+  <div id="res"></div>
+  <a class="back" href="/">Voltar ao cardápio</a>
+</main>
+<script>
+const STEPS={DELIVERY:['Pedido recebido','Pedido confirmado','Em preparação','Saiu para entrega','Pedido entregue'],PICKUP:['Pedido recebido','Pedido confirmado','Em preparação','Pronto para retirada','Retirado']};
+const RANK={RECEIVED:0,CONFIRMED:1,PREPARING:2,OUT_FOR_DELIVERY:3,DELIVERED:4,PICKED_UP:4};
+const rankOf=(st,type)=>st==='READY'?(type==='PICKUP'?3:2):(RANK[st]??0);
+const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const fmt=c=>(c/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+document.getElementById('f').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const err=document.getElementById('err'), res=document.getElementById('res');
+  err.textContent=''; res.innerHTML='';
+  try{
+    const r=await fetch('/api/orders/lookup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({number:document.getElementById('num').value.trim(),phone:document.getElementById('ph').value.trim()})});
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(data.error||'Não foi possível consultar agora.');
+    const o=data.order, cur=o.status==='CANCELLED'?-1:rankOf(o.status,o.type);
+    res.innerHTML=`<h2 style="font-size:18px">Pedido ${esc(o.number)}</h2>`+
+      (o.status==='CANCELLED'?'<p class="err">Este pedido foi cancelado.</p>':
+      `<ol>${STEPS[o.type].map((s,i)=>`<li class="${i<=cur?'done':''}">${s}</li>`).join('')}</ol>`)+
+      `<p class="meta">Total: <b>${fmt(o.totalCents)}</b> · ${o.type==='DELIVERY'?'Delivery':'Retirada'}</p>`+
+      `<ul>${o.items.map(i=>`<li>${i.quantity}× ${esc(i.name)}</li>`).join('')}</ul>`;
+  }catch(ex){ err.textContent=ex.message; }
+});
+</script>
+</body>
+</html>

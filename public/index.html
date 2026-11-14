@@ -194,11 +194,23 @@ footer small{display:block;margin-top:24px;opacity:.6}
   <div class="grid" id="menu"></div>
 </section>
 
+<section id="ofertas" aria-labelledby="ofertasTitle" style="display:none">
+  <div class="sec-head"><div><h2 id="ofertasTitle">Ofertas e combos</h2><p class="meta">Promoções válidas agora.</p></div></div>
+  <div class="grid" id="ofertasBody"></div>
+</section>
+
 <section id="sobre" class="about" aria-labelledby="aboutTitle">
-  <div>
-    <h2 id="aboutTitle">Nossa história</h2>
-    <p>Texto institucional a ser fornecido pelo restaurante: origem, filosofia e inspiração mexicana.</p>
-    <p>A cozinha prepara cada prato no momento do pedido, com molhos feitos na casa e tortillas em cada ocasião.</p>
+  <div id="aboutBox">
+    <h2 id="aboutTitle">Nuestra Casa — Uma viagem pelos sabores do México</h2>
+    <p>Nossa história nasceu de uma paixão: levar a riqueza, a tradição e a alegria da culinária mexicana para cada pessoa que atravessa nossas portas.</p>
+    <p>Inspirados pelas cores vibrantes do México, pelos aromas irresistíveis de suas cozinhas e pela tradição de reunir pessoas ao redor da mesa, criamos um espaço onde cada refeição se transforma em uma experiência especial.</p>
+    <p>Acreditamos que a comida vai muito além de alimentar. Ela conta histórias, desperta memórias, aproxima pessoas e cria momentos que merecem ser lembrados.</p>
+    <p>Por isso, cada detalhe importa. Da seleção dos ingredientes à preparação de cada prato, buscamos oferecer sabores marcantes, combinações especiais e aquele cuidado que transforma uma simples refeição em algo inesquecível.</p>
+    <p>Nosso cardápio celebra a diversidade da gastronomia mexicana, com tacos, burritos, nachos, quesadillas e outras delícias preparadas com dedicação e personalidade.</p>
+    <p>Mais do que um restaurante, queremos ser um lugar de encontros, boas conversas, celebrações e momentos compartilhados.</p>
+    <p>Seja para um almoço descontraído, um jantar especial ou simplesmente para matar a vontade de comer algo delicioso, nossas portas estão abertas para você.</p>
+    <p><b>Nuestra Casa: onde cada sabor conta uma história e cada visita se transforma em uma lembrança.</b></p>
+    <p><b>¡Bienvenidos! 🌮</b></p>
   </div>
   <div class="facts">
     <div class="fact"><b>4,6</b>média de avaliações no Google (306)</div>
@@ -209,7 +221,7 @@ footer small{display:block;margin-top:24px;opacity:.6}
 
 <section id="contato" aria-labelledby="contactTitle">
   <h2 id="contactTitle">Contato e horários</h2>
-  <p class="meta">Endereço, telefone, WhatsApp e horários serão preenchidos nas Configurações do restaurante.</p>
+  <div id="contatoBtns"></div>
 </section>
 </main>
 
@@ -217,7 +229,7 @@ footer small{display:block;margin-top:24px;opacity:.6}
   <div class="cols">
     <div><h3>Coyote Culinária TexMex</h3><p>Restaurante mexicano.</p></div>
     <div><h3>Atendimento</h3><p id="fContact">Contato a confirmar</p></div>
-    <div><h3>Links</h3><p><a href="#cardapio">Cardápio</a><br><a href="#sobre">Sobre</a><br><a href="privacidade.html">Política de privacidade</a><br><a href="termos.html">Termos de uso</a><br><a href="alergenicos.html">Alergênicos</a></p></div>
+    <div><h3>Links</h3><p><a href="#cardapio">Cardápio</a><br><a href="#sobre">Sobre</a><br><a href="privacidade.html">Política de privacidade</a><br><a href="termos.html">Termos de uso</a><br><a href="alergenicos.html">Alergênicos</a><br><a href="acompanhar.html">Acompanhar pedido</a></p></div>
   </div>
   <small>© 2026 Coyote Culinária TexMex. Informações sobre alergênicos: consulte o restaurante.</small>
 </footer>
@@ -347,11 +359,13 @@ function viewCart(){
     return `<div class="line"><div><b>${esc(p.name)}</b>${names.length?`<small>+ ${esc(names.join(', '))}</small>`:''}${l.notes?`<small>Obs.: ${esc(l.notes)}</small>`:''}</div><div style="text-align:right"><b>${fmt(unitOf(l)*l.qty)}</b></div><div class="qty"><button data-act="dec" data-i="${i}" aria-label="Diminuir quantidade">−</button><span>${l.qty}</span><button data-act="inc" data-i="${i}" aria-label="Aumentar quantidade">+</button><button class="linkbtn" data-act="rm" data-i="${i}">Remover</button></div></div>`;
   }).join('');
   const st=S.settings||{}, sub=subtotal(), min=st.minOrderCents||0;
+  const waOk=(st.whatsapp||'').replace(/\D/g,'').length>=10;
   const canOrder=!!st.acceptingOrders&&sub>=min;
   $('#cartFoot').innerHTML=`<div class="cupom"><label class="sr-only" for="cup">Cupom de desconto</label><input id="cup" placeholder="Cupom de desconto" value="${esc(S.coupon)}"><button class="btn btn-ghost btn-sm" data-act="coupon">Aplicar</button></div>
   <div class="sum"><span>Subtotal</span><span>${fmt(sub)}</span></div>
   <p class="meta">Desconto e taxa de entrega são calculados ao finalizar.</p>
   <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><button class="btn-ghost btn-sm" data-act="clear" style="flex:1">Limpar</button><button class="btn" data-act="checkout" style="flex:2" ${canOrder?'':'disabled'}>Finalizar pedido</button></div>
+  ${waOk?`<button class="btn-ghost" data-wa="1" style="width:100%;margin-top:8px">Pedir pelo WhatsApp</button>`:''}
   ${!st.acceptingOrders?'<p class="err" style="margin-top:8px">Pedidos online indisponíveis agora.</p>':''}
   ${st.acceptingOrders&&sub<min?`<p class="meta">Pedido mínimo: ${fmt(min)}</p>`:''}`;
   saveCart();
@@ -521,6 +535,70 @@ $('#cartPanel').addEventListener('submit',async e=>{
   if(resetToken) show('account',{mode:'reset',token:resetToken});
 })();
 
+
+// ---- Ofertas, combos e destaques (vindos do painel) ----
+async function loadPromos(){
+  const {promotions}=await api('/api/menu/promotions');
+  const sec=$('#ofertas'), box=$('#ofertasBody');
+  if(!promotions.length){ sec.style.display='none'; return; }
+  const KIND={DAILY_OFFER:'Oferta do dia',COMBO:'Combo',HIGHLIGHT:'Destaque'};
+  box.innerHTML=promotions.map(p=>`<article class="card"><div class="card-b">
+    <span class="meta">${esc(KIND[p.kind]||'')}</span>
+    <h3>${esc(p.title)}</h3>
+    ${p.description?`<p>${esc(p.description)}</p>`:''}
+    <div class="row">${p.priceCents!=null?`<span class="price">${fmt(p.priceCents)}</span>`:'<span></span>'}
+    ${p.product&&p.product.available?`<button class="btn btn-sm" data-prod="${esc(p.product.id)}">Pedir</button>`:''}</div>
+  </div></article>`).join('');
+  sec.style.display='';
+}
+$('#ofertasBody').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-prod]');
+  if(b) openProduct(b.dataset.prod);
+});
+
+async function loadContactLinks(){
+  const r=await api('/api/restaurant');
+  fillAbout(r);
+  const digits=(r.whatsapp||'').replace(/\D/g,'');
+  const wa=digits.length>=10?'https://wa.me/'+(digits.startsWith('55')?digits:'55'+digits):null;
+  const maps=r.address?'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(r.address):null;
+  let html='';
+  if(wa) html+=`<a class="btn" href="${wa}" target="_blank" rel="noopener" style="text-decoration:none;display:inline-block;margin:6px 8px 0 0">Falar no WhatsApp</a>`;
+  if(maps) html+=`<a class="btn-ghost" href="${maps}" target="_blank" rel="noopener" style="text-decoration:none;display:inline-block;margin:6px 0 0">Como chegar</a>`;
+  $('#contatoBtns').innerHTML=html;
+}
+
+loadPromos().catch(()=>{});
+loadContactLinks().catch(()=>{});
+
+// ---- História do restaurante (configurada pelo proprietário no painel) ----
+function fillAbout(r){
+  if(!r.aboutTitle && !r.aboutText && !r.aboutImageUrl) return;
+  const paras=(r.aboutText||'').split(/\n\s*\n/).map(t=>t.trim()).filter(Boolean);
+  $('#aboutBox').innerHTML=(r.aboutImageUrl?`<img src="${esc(r.aboutImageUrl)}" alt="" loading="lazy" style="width:100%;border-radius:16px;margin-bottom:14px;max-height:320px;object-fit:cover">`:'')
+    +`<h2 id="aboutTitle">${esc(r.aboutTitle||'Nossa história')}</h2>`
+    +paras.map(t=>`<p>${esc(t)}</p>`).join('');
+}
+
+// ---- Pedido pelo WhatsApp com o resumo do carrinho ----
+function buildWaMessage(){
+  const lines=['*Novo pedido pelo site*',''];
+  S.cart.forEach(l=>{
+    const p=S.products.get(l.productId); if(!p) return;
+    const names=l.addonIds.map(id=>p.addons.find(a=>a.id===id)?.name).filter(Boolean);
+    lines.push(`${l.qty}x ${p.name}${names.length?' + '+names.join(', '):''}${l.notes?' (obs.: '+l.notes+')':''} - ${fmt(unitOf(l)*l.qty)}`);
+  });
+  lines.push('',`Subtotal: ${fmt(subtotal())}`,'Taxa de entrega e cupom: combinar no atendimento','','Nome:','Entrega ou retirada:','Endereço (se entrega):','Forma de pagamento:');
+  return lines.join('\n');
+}
+$('#cartFoot').addEventListener('click',e=>{
+  if(!e.target.closest('[data-wa]')) return;
+  const st=S.settings||{};
+  const digits=(st.whatsapp||'').replace(/\D/g,'');
+  if(digits.length<10) return toast('WhatsApp do restaurante não configurado');
+  const num=digits.startsWith('55')?digits:'55'+digits;
+  window.open('https://wa.me/'+num+'?text='+encodeURIComponent(buildWaMessage()),'_blank','noopener');
+});
 </script>
 </body>
 </html>
