@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { newToken, newOrderNumber, sha256, safeEqual } from '../lib/security.js';
@@ -6,6 +7,15 @@ import { publish, openStream } from '../lib/events.js';
 import { requireAuth } from '../middleware/auth.js';
 
 const router = Router();
+
+// Consulta pública por número + telefone: limitada para dificultar tentativas de adivinhação.
+const lookupLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Muitas consultas. Tente novamente em alguns minutos.' },
+});
 
 const ORDER_INCLUDE = {
   items: { include: { addons: true } },
@@ -227,6 +237,23 @@ router.get('/:number/stream', async (req, res) => {
   const order = await findTracked(req.params.number, req.query.token);
   if (!order) return res.status(404).json({ error: 'Pedido não encontrado' });
   openStream(req, res, `order:${order.number}`, { status: order.status });
+});
+
+// Acompanhar pedido com número + telefone. Resposta igual para pedido inexistente e telefone errado.
+const lookupSchema = z.object({
+  number: z.string().trim().min(5).max(40),
+  phone: z.string().trim().min(8).max(30),
+});
+
+router.post('/lookup', lookupLimiter, async (req, res) => {
+  const p = lookupSchema.safeParse(req.body);
+  if (!p.success) return res.status(400).json({ error: 'Informe o número do pedido e o telefone' });
+  const order = await prisma.order.findUnique({ where: { number: p.data.number.toUpperCase() }, include: ORDER_INCLUDE });
+  const typed = p.data.phone.replace(/\D/g, '');
+  const stored = order ? order.customerPhone.replace(/\D/g, '') : '';
+  const match = !!order && typed.length >= 8 && stored.length >= 8 && typed.slice(-8) === stored.slice(-8);
+  if (!match) return res.status(404).json({ error: 'Pedido não encontrado para este telefone' });
+  res.json({ order: serialize(order) });
 });
 
 export { serialize };
